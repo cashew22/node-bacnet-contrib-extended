@@ -1,6 +1,6 @@
 {
     "name": "node-bacnet-contrib-extended",
-	"version": "0.2.0",
+    "version": "0.2.0",
     "node-red": {
         "nodes": {
             "discover-devices": "discover-devices.js",
@@ -16,9 +16,10 @@
     "dependencies": {
         "node-bacnet": "^0.2.4"
     },
-	"keywords": [ "node-red", "node-red-bacnet", "bacnet-COV", "bacnet-change-of-value" ],
+    "keywords": [ "node-red", "node-red-bacnet", "bacnet-COV", "bacnet-change-of-value" ],
     "author": "Asad Shoaib",
-	"license": "MIT",
+    "contributors": ["Éric Tremblay"],
+    "license": "MIT",
     "repository": {
         "type": "git",
         "url": "https://github.com/asad-boutique/node-bacnet-contrib-extended.git"
