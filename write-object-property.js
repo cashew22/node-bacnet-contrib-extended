@@ -1,5 +1,4 @@
 module.exports = function (RED) {
-
     "use strict";
 
     function WriteObjectProperty(config) {
@@ -20,23 +19,17 @@ module.exports = function (RED) {
                 reuseAddr: msg.reuseAddr
             });
 
-            try {
-                bacnetClient.writeProperty(msg.address, msg.objectId, msg.propertyId, msg.values, function (err, value) {
-                    if (err !== null) {
-                        node.status({fill: 'red', shape: 'dot', text: 'error'});
-                        msg.payload = err;
-                    } else {
-                        node.status({fill: 'green', shape: 'dot', text: 'Success'});
-                        msg.payload = value;
-                    }
-                });
-            } catch (e) {
-                node.status({fill: 'red', shape: 'dot', text: 'error'});
-                msg.payload = e;
-            }
-            node.send(msg);
+            bacnetClient.writeProperty(msg.address, msg.objectId, msg.propertyId, msg.values, function (err, value) {
+                if (err !== null) {
+                    node.status({fill: 'red', shape: 'dot', text: 'error'});
+                    msg.payload = err;
+                } else {
+                    node.status({fill: 'green', shape: 'dot', text: 'Success'});
+                    msg.payload = value;
+                }
+                node.send(msg);
+            });
         });
     }
     RED.nodes.registerType("write-object-property", WriteObjectProperty);
 };
-
