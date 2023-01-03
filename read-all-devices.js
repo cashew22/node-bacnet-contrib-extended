@@ -1,365 +1,214 @@
 module.exports = function(RED) {
-
-
-  
-
-  function ReadAllDevices(config) {
-      RED.nodes.createNode(this,config);
-
-
-      const Bacnet = require('node-bacnet')
-
-
-
-
-
-      this.name = config.name
-
-      const node = this;
-
-      node.status({ fill: 'green', shape: 'dot', text: 'active' })
-
-      
-
-
-
-      node.on('input', function(msg) {
-
-
-
-
-        if(msg.communicationPort == "" || msg.communicationPort == null){
-
-          msg.communicationPort = 47808;
-
-        }
-
-        if(msg.interface == "" || msg.interface == null){
-
-          msg.interface = "0.0.0.0";
-        }
-
-        if(msg.broadcastAddress == "" || msg.broadcastAddress == null){
-
-          msg.broadcastAddress = "255.255.255.255";
-        }
-
-        if(msg.apduTimeout == "" || msg.apduTimeout == null){
-
-          msg.apduTimeout = 7000;
-        }
-
-        if(msg.reuseAddr == "" || msg.reuseAddr == null){
-          msg.reuseAddr = true;
-        }
-
-
-        if(msg.transportClosedDuration == "" || msg.transportClosedDuration == null){
-          msg.transportClosedDuration = 90000;
-        }
-
-        if(msg.getAllPropertiesManually == "" || msg.getAllPropertiesManually == null){
-          msg.getAllPropertiesManually = "true";
-        }
-
-
-
-
-
-          var rand1 = Math.floor(Math.random() * 5100);
-
-          console.log("rand1 --> ", rand1);
-
-
-          var bacnetClient = new Bacnet({ 
-            port: msg.communicationPort + rand1,         // Use BAC1 as communication port
-            interface: msg.interface ,          // Listen on a specific interface
-            broadcastAddress: msg.broadcastAddress,  // Use the subnet broadcast address
-            apduTimeout: msg.apduTimeout,
-            reuseAddr: msg.reuseAddr                     
-           });
-
-
-           
-
-
-           var bacnetClient2 = new Bacnet({ 
-            port: msg.communicationPort,         // Use BAC1 as communication port
-            interface: msg.interface ,          // Listen on a specific interface
-            broadcastAddress: msg.broadcastAddress,  // Use the subnet broadcast address
-            apduTimeout: msg.apduTimeout,
-            reuseAddr: msg.reuseAddr                     
-           });
-
-          const knownDevices = [];
-
-
-          console.log("bacnetClient 222-> ", bacnetClient)
-    
-          // emmitted when Bacnet server listens for incoming UDP packages
-          bacnetClient2.on('listening', () => {
-          console.log('discovering devices for 20 seconds ...');
-          // discover devices once we are listening
-          bacnetClient.whoIs();
-
-        });
-
-
-          setTimeout(() => {
-
-            //console.log("bacnetClient ---> ", bacnetClient)
-
-            console.log('closed transport after 9s ---Garbage Collection' + Date.now());
-            
-            try{
-              bacnetClient.close();
-            } 
-            catch(e){
-             console.log("exception -> ", e);
-            }
-            
-            
-            }, msg.transportClosedDuration);
-
-          
-
-          console.log("input received");
-
-          var limitToDevice = null;
-
-          
-          
-
-          
-
-          
-          
-          
-
-
-          
-
-
-          bacnetClient2.on('iAm', (device) => {
-          // address object of discovered device,
-          // just use in subsequent calls that are directed to this device
-
-          console.log("iAm ----> ", device);
-
-          const address = device.header.sender;
-
-          //discovered device ID
-          const deviceId = device.payload.deviceId;
-          if (knownDevices.includes(deviceId)) return;
-          if (limitToDevice !== null && limitToDevice !== deviceId) return;
-
-          console.log('Found Device ' + deviceId + ' on ' + JSON.stringify(address));
-          knownDevices.push(deviceId);
-
-          const propertyList = [];
-          propSubSet.forEach(item => {
-              propertyList.push({id: item});
-          });
-
-          console.log("propertyList -> ", propertyList);
-
-          const requestArray = [{
-              objectId: {type: 8, instance: deviceId},
-              properties: propertyList
-              }
-          ];
-
-
-
-
-
-          if(msg.getAllPropertiesManually == "true"){
-
-            console.log('ReadPropertyMultiple is not supported:');
-            getAllPropertiesManually(address, {type: 8, instance: deviceId}, result => {
-            parseDeviceObject(address, result, {type: 8, instance: deviceId}, false, res => printResultObject(deviceId, res, msg));
-
+    "use strict";
+
+    function ReadAllDevices(config) {
+        RED.nodes.createNode(this, config);
+
+        const Bacnet = require('node-bacnet');
+        const node = this;
+        this.name = config.name;
+
+        node.on('input', function(msg) {
+            node.status({fill: 'green', shape: 'dot', text: 'Sending...'});
+
+            var bacnetClient = new Bacnet({
+                port: 47808 + Math.floor(Math.random() * 7100),
+                interface: msg.interface,
+                broadcastAddress: msg.broadcastAddress,
+                apduTimeout: msg.apduTimeout,
+                reuseAddr: msg.reuseAddr
             });
 
+            var bacnetClient2 = new Bacnet({
+                port: msg.communicationPort,
+                interface: msg.interface,
+                broadcastAddress: msg.broadcastAddress,
+                apduTimeout: msg.apduTimeout,
+                reuseAddr: msg.reuseAddr
+            });
 
-          }
+            const knownDevices = [];
 
-          if(msg.getAllPropertiesManually == "false"){
+              // emmitted when Bacnet server listens for incoming UDP packages
+            bacnetClient2.on('listening', function () {
+                // discover devices once we are listening
+                bacnetClient.whoIs();
+            });
 
-            bacnetClient.readPropertyMultiple(address, requestArray, (err, value) => {
-              if (err) {
-              console.log(deviceId, 'ReadPropertyMultiple is not supported:', err.message);
-              getAllPropertiesManually(address, {type: 8, instance: deviceId}, result => {
-              parseDeviceObject(address, result, {type: 8, instance: deviceId}, false, res => printResultObject(deviceId, res, msg));
-  
-              console.log("test 1111 -> ");
-              });
-              } else {
-              console.log(deviceId, 'ReadPropertyMultiple supported ...');
-              parseDeviceObject(address, value, {type: 8, instance: deviceId}, true, res => printResultObject(deviceId, res, msg));
-  
-              console.log("test 2222 -> ");
-  
-              }
-          });
-          }
-          
+            setTimeout(function () {
+                try {
+                    bacnetClient.close();
+                } catch (e){
+                    console.log("exception -> ", e);
+                }
+            }, msg.transportClosedDuration);
 
+            var limitToDevice = null;
 
-/*
-          bacnetClient.readPropertyMultiple(address, requestArray, (err, value) => {
-              if (err) {
-              console.log(deviceId, 'No ReadPropertyMultiple supported:', err.message);
-              getAllPropertiesManually(address, {type: 8, instance: deviceId}, result => {
-              parseDeviceObject(address, result, {type: 8, instance: deviceId}, false, res => printResultObject(deviceId, res, msg));
+            bacnetClient2.on('iAm', function (device) {
+                // address object of discovered device,
+                // just use in subsequent calls that are directed to this device
 
-              console.log("test 1111 -> ");
+                console.log("iAm ----> ", device);
 
-              });
-              } else {
-              console.log(deviceId, 'ReadPropertyMultiple supported ...');
-              parseDeviceObject(address, value, {type: 8, instance: deviceId}, true, res => printResultObject(deviceId, res, msg));
+                const address = device.header.sender;
+                const deviceId = device.payload.deviceId;
+                if (knownDevices.includes(deviceId)) {
+                    return;
+                }
 
-              console.log("test 2222 -> ");
+                if (limitToDevice !== null && limitToDevice !== deviceId) {
+                    return;
+                }
 
-              
-              }
-          });
-          */
+                console.log('Found Device ' + deviceId + ' on ' + JSON.stringify(address));
+                knownDevices.push(deviceId);
 
+                const propertyList = [];
+                propSubSet.forEach(function (item) {
+                    propertyList.push({id: item});
+                });
 
-          })
+                console.log("propertyList -> ", propertyList);
 
+                const requestArray = [{
+                    objectId: {type: 8, instance: deviceId},
+                    properties: propertyList
+                }];
 
-
-
-
-
-
-
-
-          
-          
-          //});
-
-
-
-          console.log("test test 123");
-
-
-
-
-
-
-
+                if (msg.getAllPropertiesManually === "true") {
+                    console.log('ReadPropertyMultiple is not supported:');
+                    getAllPropertiesManually(address, {type: 8, instance: deviceId}, function (result) {
+                        parseDeviceObject(address, result, {type: 8, instance: deviceId}, false, function (res) {
+                            printResultObject(deviceId, res, msg);
+                        });
+                    });
+                } else {
+                    bacnetClient.readPropertyMultiple(address, requestArray, function (err, value) {
+                        if (err) {
+                            console.log(deviceId, 'ReadPropertyMultiple is not supported:', err.message);
+                            getAllPropertiesManually(address, {type: 8, instance: deviceId}, function (result) {
+                                parseDeviceObject(address, result, {type: 8, instance: deviceId}, false, function (res) {
+                                    printResultObject(deviceId, res, msg);
+                                });
+                            });
+                        } else {
+                            console.log(deviceId, 'ReadPropertyMultiple supported ...');
+                            parseDeviceObject(address, value, {type: 8, instance: deviceId}, true, function (res) {
+                                printResultObject(deviceId, res, msg);
+                            });
+                        }
+                    });
+                }
+            });
 
             // Map the Property types to their enums/bitstrings
-          const PropertyIdentifierToEnumMap = {};
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.OBJECT_TYPE] = Bacnet.enum.ObjectType;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.SEGMENTATION_SUPPORTED] = Bacnet.enum.Segmentation;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.EVENT_STATE] = Bacnet.enum.EventState;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.UNITS] = Bacnet.enum.EngineeringUnits;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.RELIABILITY] = Bacnet.enum.Reliability;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.NOTIFY_TYPE] = Bacnet.enum.NotifyType;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.POLARITY] = Bacnet.enum.Polarity;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.PROTOCOL_SERVICES_SUPPORTED] = Bacnet.enum.ServicesSupported;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.PROTOCOL_OBJECT_TYPES_SUPPORTED] = Bacnet.enum.ObjectTypesSupported;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.STATUS_FLAGS] = Bacnet.enum.StatusFlags;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.LIMIT_ENABLE] = Bacnet.enum.LimitEnable;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.EVENT_ENABLE] = Bacnet.enum.EventTransitionBits;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.ACKED_TRANSITIONS] = Bacnet.enum.EventTransitionBits;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.SYSTEM_STATUS] = Bacnet.enum.DeviceStatus;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.SYSTEM_STATUS] = Bacnet.enum.DeviceStatus;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.ACK_REQUIRED] = Bacnet.enum.EventTransitionBits;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.LOGGING_TYPE] = Bacnet.enum.LoggingType;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.FILE_ACCESS_METHOD] = Bacnet.enum.FileAccessMethod;
-          PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.NODE_TYPE] = Bacnet.enum.NodeType;
+            const PropertyIdentifierToEnumMap = {};
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.OBJECT_TYPE] = Bacnet.enum.ObjectType;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.SEGMENTATION_SUPPORTED] = Bacnet.enum.Segmentation;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.EVENT_STATE] = Bacnet.enum.EventState;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.UNITS] = Bacnet.enum.EngineeringUnits;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.RELIABILITY] = Bacnet.enum.Reliability;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.NOTIFY_TYPE] = Bacnet.enum.NotifyType;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.POLARITY] = Bacnet.enum.Polarity;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.PROTOCOL_SERVICES_SUPPORTED] = Bacnet.enum.ServicesSupported;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.PROTOCOL_OBJECT_TYPES_SUPPORTED] = Bacnet.enum.ObjectTypesSupported;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.STATUS_FLAGS] = Bacnet.enum.StatusFlags;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.LIMIT_ENABLE] = Bacnet.enum.LimitEnable;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.EVENT_ENABLE] = Bacnet.enum.EventTransitionBits;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.ACKED_TRANSITIONS] = Bacnet.enum.EventTransitionBits;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.SYSTEM_STATUS] = Bacnet.enum.DeviceStatus;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.SYSTEM_STATUS] = Bacnet.enum.DeviceStatus;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.ACK_REQUIRED] = Bacnet.enum.EventTransitionBits;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.LOGGING_TYPE] = Bacnet.enum.LoggingType;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.FILE_ACCESS_METHOD] = Bacnet.enum.FileAccessMethod;
+            PropertyIdentifierToEnumMap[Bacnet.enum.PropertyIdentifier.NODE_TYPE] = Bacnet.enum.NodeType;
 
-          // Sometimes the Map needs to be more specific
-          const ObjectTypeSpecificPropertyIdentifierToEnumMap = {};
+            // Sometimes the Map needs to be more specific
+            const ObjectTypeSpecificPropertyIdentifierToEnumMap = {};
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_INPUT] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_INPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV;
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_INPUT][Bacnet.enum.PropertyIdentifier.MODE] = Bacnet.enum.BinaryPV;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_INPUT] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_INPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_INPUT][Bacnet.enum.PropertyIdentifier.MODE] = Bacnet.enum.BinaryPV;
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.ANALOG_INPUT] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.ANALOG_INPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV; //????
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.ANALOG_INPUT] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.ANALOG_INPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV; //????
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.ANALOG_OUTPUT] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.ANALOG_OUTPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV; //????
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.ANALOG_OUTPUT] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.ANALOG_OUTPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV; //????
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_OUTPUT] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_OUTPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV;
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_OUTPUT][Bacnet.enum.PropertyIdentifier.RELINQUISH_DEFAULT] = Bacnet.enum.BinaryPV;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_OUTPUT] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_OUTPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_OUTPUT][Bacnet.enum.PropertyIdentifier.RELINQUISH_DEFAULT] = Bacnet.enum.BinaryPV;
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_VALUE] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_VALUE][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV;
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_VALUE][Bacnet.enum.PropertyIdentifier.RELINQUISH_DEFAULT] = Bacnet.enum.BinaryPV;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_VALUE] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_VALUE][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_VALUE][Bacnet.enum.PropertyIdentifier.RELINQUISH_DEFAULT] = Bacnet.enum.BinaryPV;
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_LIGHTING_OUTPUT] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_LIGHTING_OUTPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryLightingPV;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_LIGHTING_OUTPUT] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_LIGHTING_OUTPUT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryLightingPV;
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BITSTRING_VALUE] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_VALUE][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV; // ???
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BITSTRING_VALUE] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.BINARY_VALUE][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.BinaryPV; // ???
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.LifeSafetyState;
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.TRACKING_VALUE] = Bacnet.enum.LifeSafetyState;
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.MODE] = Bacnet.enum.LifeSafetyMode;
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.ACCEPTED_MODES] = Bacnet.enum.LifeSafetyMode;
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.SILENCED] = Bacnet.enum.LifeSafetyState;
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.OPERATION_EXPECTED] = Bacnet.enum.LifeSafetyOperation;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.LifeSafetyState;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.TRACKING_VALUE] = Bacnet.enum.LifeSafetyState;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.MODE] = Bacnet.enum.LifeSafetyMode;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.ACCEPTED_MODES] = Bacnet.enum.LifeSafetyMode;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.SILENCED] = Bacnet.enum.LifeSafetyState;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_POINT][Bacnet.enum.PropertyIdentifier.OPERATION_EXPECTED] = Bacnet.enum.LifeSafetyOperation;
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_ZONE] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_ZONE][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.LifeSafetyState;
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_ZONE][Bacnet.enum.PropertyIdentifier.MODE] = Bacnet.enum.LifeSafetyMode;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_ZONE] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_ZONE][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.LifeSafetyState;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LIFE_SAFETY_ZONE][Bacnet.enum.PropertyIdentifier.MODE] = Bacnet.enum.LifeSafetyMode;
 
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LOAD_CONTROL] = {};
-          ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LOAD_CONTROL][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.ShedState;
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LOAD_CONTROL] = {};
+            ObjectTypeSpecificPropertyIdentifierToEnumMap[Bacnet.enum.ObjectType.LOAD_CONTROL][Bacnet.enum.PropertyIdentifier.PRESENT_VALUE] = Bacnet.enum.ShedState;
 
 
-          // For Objects we read out All properties if cli parameter --all is provided
-          const propSubSet = [
-          /* normally supported from all devices */
-          Bacnet.enum.PropertyIdentifier.OBJECT_IDENTIFIER,
-          Bacnet.enum.PropertyIdentifier.OBJECT_NAME,
-          Bacnet.enum.PropertyIdentifier.OBJECT_TYPE,
-          Bacnet.enum.PropertyIdentifier.PRESENT_VALUE,
-          // Bacnet.enum.PropertyIdentifier.STATUS_FLAGS,
-          // Bacnet.enum.PropertyIdentifier.EVENT_STATE,
-          // Bacnet.enum.PropertyIdentifier.RELIABILITY,
-          // Bacnet.enum.PropertyIdentifier.OUT_OF_SERVICE,
-          // Bacnet.enum.PropertyIdentifier.UNITS,
-          // /* other properties */
-          // Bacnet.enum.PropertyIdentifier.DESCRIPTION,
-          // Bacnet.enum.PropertyIdentifier.SYSTEM_STATUS,
-          // Bacnet.enum.PropertyIdentifier.VENDOR_NAME,
-          // Bacnet.enum.PropertyIdentifier.VENDOR_IDENTIFIER,
-          // Bacnet.enum.PropertyIdentifier.MODEL_NAME,
-          // Bacnet.enum.PropertyIdentifier.FIRMWARE_REVISION,
-          // Bacnet.enum.PropertyIdentifier.APPLICATION_SOFTWARE_VERSION,
-          // Bacnet.enum.PropertyIdentifier.LOCATION,
-          // Bacnet.enum.PropertyIdentifier.LOCAL_DATE,
-          // Bacnet.enum.PropertyIdentifier.LOCAL_TIME,
-          // Bacnet.enum.PropertyIdentifier.UTC_OFFSET,
-          // Bacnet.enum.PropertyIdentifier.DAYLIGHT_SAVINGS_STATUS,
-          // Bacnet.enum.PropertyIdentifier.PROTOCOL_VERSION,
-          // Bacnet.enum.PropertyIdentifier.PROTOCOL_REVISION,
-          // Bacnet.enum.PropertyIdentifier.PROTOCOL_SERVICES_SUPPORTED,
-          // Bacnet.enum.PropertyIdentifier.PROTOCOL_OBJECT_TYPES_SUPPORTED,
-          Bacnet.enum.PropertyIdentifier.OBJECT_LIST,
-          // Bacnet.enum.PropertyIdentifier.MAX_APDU_LENGTH_ACCEPTED,
-          // Bacnet.enum.PropertyIdentifier.SEGMENTATION_SUPPORTED,
-          // Bacnet.enum.PropertyIdentifier.APDU_TIMEOUT,
-          // Bacnet.enum.PropertyIdentifier.NUMBER_OF_APDU_RETRIES,
-          // Bacnet.enum.PropertyIdentifier.DEVICE_ADDRESS_BINDING,
-          // Bacnet.enum.PropertyIdentifier.DATABASE_REVISION,
-          // Bacnet.enum.PropertyIdentifier.MAX_INFO_FRAMES,
-          // Bacnet.enum.PropertyIdentifier.MAX_MASTER,
-          //Bacnet.enum.PropertyIdentifier.ACTIVE_COV_SUBSCRIPTIONS,
-          //Bacnet.enum.PropertyIdentifier.ACTIVE_COV_MULTIPLE_SUBSCRIPTIONS
-          ];
-          const debug = false;
+            // For Objects we read out All properties if cli parameter --all is provided
+            const propSubSet = [
+            /* normally supported from all devices */
+            Bacnet.enum.PropertyIdentifier.OBJECT_IDENTIFIER,
+            Bacnet.enum.PropertyIdentifier.OBJECT_NAME,
+            Bacnet.enum.PropertyIdentifier.OBJECT_TYPE,
+            Bacnet.enum.PropertyIdentifier.PRESENT_VALUE,
+            // Bacnet.enum.PropertyIdentifier.STATUS_FLAGS,
+            // Bacnet.enum.PropertyIdentifier.EVENT_STATE,
+            // Bacnet.enum.PropertyIdentifier.RELIABILITY,
+            // Bacnet.enum.PropertyIdentifier.OUT_OF_SERVICE,
+            // Bacnet.enum.PropertyIdentifier.UNITS,
+            // /* other properties */
+            // Bacnet.enum.PropertyIdentifier.DESCRIPTION,
+            // Bacnet.enum.PropertyIdentifier.SYSTEM_STATUS,
+            // Bacnet.enum.PropertyIdentifier.VENDOR_NAME,
+            // Bacnet.enum.PropertyIdentifier.VENDOR_IDENTIFIER,
+            // Bacnet.enum.PropertyIdentifier.MODEL_NAME,
+            // Bacnet.enum.PropertyIdentifier.FIRMWARE_REVISION,
+            // Bacnet.enum.PropertyIdentifier.APPLICATION_SOFTWARE_VERSION,
+            // Bacnet.enum.PropertyIdentifier.LOCATION,
+            // Bacnet.enum.PropertyIdentifier.LOCAL_DATE,
+            // Bacnet.enum.PropertyIdentifier.LOCAL_TIME,
+            // Bacnet.enum.PropertyIdentifier.UTC_OFFSET,
+            // Bacnet.enum.PropertyIdentifier.DAYLIGHT_SAVINGS_STATUS,
+            // Bacnet.enum.PropertyIdentifier.PROTOCOL_VERSION,
+            // Bacnet.enum.PropertyIdentifier.PROTOCOL_REVISION,
+            // Bacnet.enum.PropertyIdentifier.PROTOCOL_SERVICES_SUPPORTED,
+            // Bacnet.enum.PropertyIdentifier.PROTOCOL_OBJECT_TYPES_SUPPORTED,
+            Bacnet.enum.PropertyIdentifier.OBJECT_LIST
+            // Bacnet.enum.PropertyIdentifier.MAX_APDU_LENGTH_ACCEPTED,
+            // Bacnet.enum.PropertyIdentifier.SEGMENTATION_SUPPORTED,
+            // Bacnet.enum.PropertyIdentifier.APDU_TIMEOUT,
+            // Bacnet.enum.PropertyIdentifier.NUMBER_OF_APDU_RETRIES,
+            // Bacnet.enum.PropertyIdentifier.DEVICE_ADDRESS_BINDING,
+            // Bacnet.enum.PropertyIdentifier.DATABASE_REVISION,
+            // Bacnet.enum.PropertyIdentifier.MAX_INFO_FRAMES,
+            // Bacnet.enum.PropertyIdentifier.MAX_MASTER,
+            //Bacnet.enum.PropertyIdentifier.ACTIVE_COV_SUBSCRIPTIONS,
+            //Bacnet.enum.PropertyIdentifier.ACTIVE_COV_MULTIPLE_SUBSCRIPTIONS
+            ];
+            const debug = false;
 
           /**
           * Retrieve all properties manually because ReadPropertyMultiple is not available
